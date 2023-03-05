@@ -42,7 +42,7 @@ from dash import html, dcc
 # Read Data #
 #############
 
-max_days_since_last_use = 180
+max_days_since_last_use = 90
 
 tables = utils.read_tables()
 table_complete = utils.get_work_interval(tables)
@@ -53,7 +53,7 @@ table_complete = utils.get_work_interval(tables)
 ############################
 
 set_max_days_since_last_use = [
-    'Valid projects are those used within the last ',
+    'Active projects are those used within the last ',
     dcc.Input(id='input-days-since-last-use',
               value=max_days_since_last_use,
               style={'width': '100px'},
@@ -61,14 +61,15 @@ set_max_days_since_last_use = [
     ' days. ',
 ]
 
-days_since_last_use = utils.calc_days_since_last_use(table_complete)
-days_since_last_use['label'] = ['{} ({} days)'.format(x, y) for i, (x, y) in days_since_last_use.iterrows()]
+days_since_last_use = utils.count_days_since_last_use(table_complete, remove_undefined=False)
+default_checked = days_since_last_use['project_name'][days_since_last_use.start <= max_days_since_last_use]
+default_checked = default_checked[default_checked != 'UNDEFINED']
 
 checklist_active_projects = [
     html.Div('The following projects are active projects:'),
     dcc.Checklist(
-        options=days_since_last_use.label,
-        value=days_since_last_use[days_since_last_use.start <= max_days_since_last_use].label,
+        options={x: '{} ({} days)'.format(x, y) for i, (x, y) in days_since_last_use.iterrows()},
+        value=default_checked,
         labelStyle={'display': 'inline-block', 'width': '250px'},
         inputStyle={"margin-right": "5px"},
         id='checklist-active-projects',
@@ -92,3 +93,37 @@ graph_accum_duration_by_project = dcc.Graph(
 graph_daily_time_by_project = dcc.Graph(
     id='graph-daily-time-by-project',
 )
+
+
+#####################################
+# Select Project for Visualization #
+#####################################
+
+all_projects = table_complete.project_name.unique()
+default_project_selection = table_complete['project_name'][table_complete['start'].idxmax()]
+
+select_project = [
+    'Select a project for the pie chart below: ',
+    dcc.Dropdown(
+        all_projects, default_project_selection,
+        id='dropdown-pie-project',
+        style={'width': '150px'},
+        clearable=False,
+    ),
+    html.Div(dcc.Graph(id='pie-project')),
+]
+
+
+################################
+# Select Tag for Visualization #
+################################
+
+select_tag = [
+    'Select a tag for the pie chart below: ',
+    dcc.Dropdown(
+        id='dropdown-pie-tag',
+        style={'width': '150px'},
+        clearable=False,
+    ),
+    html.Div(dcc.Graph(id='pie-tag')),
+]

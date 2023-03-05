@@ -7,6 +7,14 @@ import pandas as pd
 from config import *
 
 
+def get_all_tags(table):
+    all_tags = table['tags'].unique()
+    all_tags = [i for i in all_tags if i != '']
+    all_tags = [i.split(',') if ',' in i else [i] for i in all_tags]
+    all_tags = pd.unique([x for y in all_tags for x in y])
+    return all_tags
+
+
 def datetime_to_unix(t):
     return (t.tz_convert('UTC') - pd.Timestamp('1970-01-01').tz_localize('UTC'))  // pd.Timedelta('1s')
 
@@ -15,31 +23,16 @@ def unix_to_datetime(t):
     return pd.to_datetime(t, unit='s', origin='unix').tz_localize('UTC').tz_convert(MY_TZ)
 
 
-def calc_days_since_last_use(table):
+def count_days_since_last_use(table, remove_undefined=True):
+    
     days_since_last_use = pd.Timestamp.now().tz_localize(MY_TZ) - table.groupby('project_name')['start'].max()
     days_since_last_use = days_since_last_use.dt.floor('d').dt.days
     days_since_last_use = pd.DataFrame(days_since_last_use.sort_values(ascending=True)).reset_index()
-    return days_since_last_use
-
-
-def subset_table(
-    table_in,
-    remove_undefined=True,
-    max_days_since_last_use=180):
     
-    # Create a copy
-    table = table_in.copy()
-    
-    # Remove rows with undefined projects
     if remove_undefined:
-        table = table[table.project_name != 'UNDEFINED']
-    
-    # Remove inactive projects
-    days_since_last_use = calc_days_since_last_use(table)
-    active_projects = days_since_last_use[days_since_last_use['start'] <= max_days_since_last_use]['project_name']
-    table = table[table.project_name.isin(active_projects)]
-    
-    return table
+        days_since_last_use = days_since_last_use[days_since_last_use['project_name'] != 'UNDEFINED']
+        
+    return days_since_last_use
 
 
 def read_tables(table_files=TABLE_FILES, table_dir=TABLE_DIR,
@@ -149,6 +142,9 @@ def get_work_interval(tables, add_tags=True, use_project_names=True):
     if table[mask].shape[0] != 0:
         print(table[mask])
         raise Exception('The above rows do not have a project and tags assigned!')
+        
+    # Convert unit
+    table['duration'] /= 3600
                 
     return table
 
@@ -162,7 +158,9 @@ def summarize_duration_by_project(table, accumulate_duration, temporal_unit='D')
         # Get entries associated with this project
         x = table[table['project_name'] == project]
         x = x.groupby(pd.Grouper(key='start', freq=temporal_unit))['duration'].sum()
-        x /= 3600
+        
+        # Remove zero rows
+        x = x[x > 0]
         
         # Create new data frame for this project
         df = pd.DataFrame(x)
