@@ -2,3 +2,11 @@
 
 This web server is written in Python for visualizing the data from [Time Tracker](https://apps.nextcloud.com/apps/timetracker).
 
+Requirements:
+
+- pandas
+- plotly
+- matplotlib
+- numpy
+- dash
+- dash-bootstrap-components

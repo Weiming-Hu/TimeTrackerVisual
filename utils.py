@@ -7,6 +7,41 @@ import pandas as pd
 from config import *
 
 
+def datetime_to_unix(t):
+    return (t.tz_convert('UTC') - pd.Timestamp('1970-01-01').tz_localize('UTC'))  // pd.Timedelta('1s')
+
+
+def unix_to_datetime(t):
+    return pd.to_datetime(t, unit='s', origin='unix').tz_localize('UTC').tz_convert(MY_TZ)
+
+
+def calc_days_since_last_use(table):
+    days_since_last_use = pd.Timestamp.now().tz_localize(MY_TZ) - table.groupby('project_name')['start'].max()
+    days_since_last_use = days_since_last_use.dt.floor('d').dt.days
+    days_since_last_use = pd.DataFrame(days_since_last_use.sort_values(ascending=True)).reset_index()
+    return days_since_last_use
+
+
+def subset_table(
+    table_in,
+    remove_undefined=True,
+    max_days_since_last_use=180):
+    
+    # Create a copy
+    table = table_in.copy()
+    
+    # Remove rows with undefined projects
+    if remove_undefined:
+        table = table[table.project_name != 'UNDEFINED']
+    
+    # Remove inactive projects
+    days_since_last_use = calc_days_since_last_use(table)
+    active_projects = days_since_last_use[days_since_last_use['start'] <= max_days_since_last_use]['project_name']
+    table = table[table.project_name.isin(active_projects)]
+    
+    return table
+
+
 def read_tables(table_files=TABLE_FILES, table_dir=TABLE_DIR,
                 filter_user='Weiming', remove_running=True, translate_time=True, tz=MY_TZ):
     
@@ -18,7 +53,7 @@ def read_tables(table_files=TABLE_FILES, table_dir=TABLE_DIR,
         
         # Make sure the number of columns match the shape of the table
         t = pd.read_csv(file_path, sep='\t')
-        assert t.shape[1] == len(columns), 'Column mismatch for {}'.format(k)
+        assert t.shape[1] == len(columns), 'Column mismatch for {}'.format(file_name)
         
         # Read table
         t = pd.read_csv(file_path, sep='\t', names=columns)
@@ -101,5 +136,43 @@ def get_work_interval(tables, add_tags=True, use_project_names=True):
         
         # Remove old column
         del table['project_id']
+        
+    # Drop some columns that we do not need
+    del table['id']
+    del table['lineend']
+    del table['user_uid']
+    del table['running']
+    
+    # Check data
+    mask = (table['project_name'] == 'UNDEFINED') & table['tags'].isin([''])
+    
+    if table[mask].shape[0] != 0:
+        print(table[mask])
+        raise Exception('The above rows do not have a project and tags assigned!')
                 
     return table
+
+
+def summarize_duration_by_project(table, accumulate_duration, temporal_unit='D'):
+    
+    project_df = []
+    
+    for project in table['project_name'].unique():
+        
+        # Get entries associated with this project
+        x = table[table['project_name'] == project]
+        x = x.groupby(pd.Grouper(key='start', freq=temporal_unit))['duration'].sum()
+        x /= 3600
+        
+        # Create new data frame for this project
+        df = pd.DataFrame(x)
+        df['project'] = project
+
+        if accumulate_duration:
+            df['duration'] = df['duration'].cumsum()
+
+        project_df.append(df)
+
+    project_df = pd.concat(project_df).reset_index()
+    
+    return project_df
