@@ -68,7 +68,7 @@ tab_summary = html.Div(
             dbc.Col(dcc.Dropdown(
                 {
                     'D': 'Day',
-                    'W-MON': 'Week',
+                    'W-SUN': 'Week',
                     'SM': 'Semi-month',
                     'MS': 'Month',
                     'Q-DEC': 'Quaterly'
@@ -86,11 +86,11 @@ tab_summary = html.Div(
             dbc.Col(dcc.Dropdown(
                 {
                     'D': 'Day',
-                    'W-MON': 'Week',
+                    'W-SUN': 'Week',
                     'SM': 'Semi-month',
                     'MS': 'Month',
                     'Q-DEC': 'Quaterly'
-                }, 'W-MON',
+                }, 'W-SUN',
                 id='dropdown-temporal-unit-2',
                 clearable=False,
             ), width=1),
